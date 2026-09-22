@@ -1,0 +1,48 @@
+name: API Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run API in background
+        run: |
+          nohup npm start > api.log 2>&1 &
+          echo $! > api.pid
+
+      - name: Wait for API health check
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/healthcheck; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "API did not become healthy within 60 seconds"
+          cat api.log
+          exit 1
+
+      - name: Run API tests
+        run: npm test
